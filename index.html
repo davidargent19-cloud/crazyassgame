@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>Puzzle Builder & Merge Game</title>
+
+<style>
+
+body {
+
+    font-family: Arial, sans-serif;
+
+    background: #f4f6f8;
+
+    padding: 20px;
+
+}
+
+
+h1, h2 {
+
+    text-align: center;
+
+}
+
+
+.section {
+
+    max-width: 1000px;
+
+    margin: auto;
+
+    background: white;
+
+    padding: 15px;
+
+    border-radius: 8px;
+
+    margin-bottom: 20px;
+
+}
+
+
+.group {
+
+    border: 1px solid #ccc;
+
+    padding: 10px;
+
+    margin-bottom: 10px;
+
+}
+
+
+.group input, .group textarea {
+
+    width: 100%;
+
+    margin-bottom: 6px;
+
+}
+
+
+button {
+
+    padding: 10px 15px;
+
+    cursor: pointer;
+
+    font-size: 14px;
+
+}
+
+
+#grid {
+
+    display: grid;
+
+    grid-template-columns: repeat(10, 1fr);
+
+    gap: 6px;
+
+    margin-top: 20px;
+
+}
+
+
+.tile {
+
+    padding: 10px;
+
+    border-radius: 6px;
+
+    cursor: pointer;
+
+    transition: all 0.3s ease;
+
+}
+
+
+.tile.selected {
+
+    outline: 3px solid #333;
+
+}
+
+
+.tile.collapsing {
+
+    transform: scale(0.3);
+
+    opacity: 0;
+
+}
+
+
+.group-label {
+
+    font-weight: bold;
+
+    border-bottom: 2px solid rgba(0,0,0,0.2);
+
+    margin-bottom: 4px;
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+
+<h1>Puzzle Builder</h1>
+
+
+<div class="section" id="builder">
+
+    <h2>Create Your Puzzle</h2>
+
+    <div id="groups"></div>
+
+    <button onclick="generateLink()">Generate Shareable Link</button>
+
+    <p id="linkOutput"></p>
+
+</div>
+
+
+<div class="section" id="game" style="display:none;">
+
+    <h2>Play Puzzle</h2>
+
+    <div id="grid"></div>
+
+    <p id="message"></p>
+
+</div>
+
+
+<script>
+
+const groupContainer = document.getElementById("groups");
+
+
+// Create 10 input blocks
+
+for (let i = 0; i < 10; i++) {
+
+    const div = document.createElement("div");
+
+    div.className = "group";
+
+    div.innerHTML = `
+
+        <input placeholder="Group Name">
+
+        <input type="color">
+
+        <textarea rows="2" placeholder="Enter 10 words, comma-separated"></textarea>
+
+    `;
+
+    groupContainer.appendChild(div);
+
+}
+
+
+function generateLink() {
+
+    const groupEls = document.querySelectorAll(".group");
+
+    let groups = [];
+
+
+    for (let g of groupEls) {
+
+        const name = g.children[0].value.trim();
+
+        const color = g.children[1].value;
+
+        const words = g.children[2].value.split(",").map(w => w.trim()).filter(Boolean);
+
+
+        if (!name || words.length !== 10) {
+
+            alert("Each group must have a name and exactly 10 words.");
+
+            return;
+
+        }
+
+
+        groups.push({ name, color, words });
+
+    }
+
+
+    const encoded = btoa(JSON.stringify(groups));
+
+    const link = location.origin + location.pathname + "#puzzle=" + encoded;
+
+    document.getElementById("linkOutput").innerHTML =
+
+        <strong>Share this link:</strong><br><a href="${link}" target="_blank">${link}</a>;
+
+}
+
+
+// =====================
+
+// GAME LOGIC
+
+// =====================
+
+
+const hash = location.hash;
+
+if (hash.startsWith("#puzzle=")) {
+
+    document.getElementById("builder").style.display = "none";
+
+    document.getElementById("game").style.display = "block";
+
+
+    const groups = JSON.parse(atob(hash.replace("#puzzle=", "")));
+
+    startGame(groups);
+
+}
+
+
+let tiles = [];
+
+let selected = [];
+
+const grid = document.getElementById("grid");
+
+const message = document.getElementById("message");
+
+
+function startGame(groups) {
+
+    groups.forEach(g => {
+
+        g.words.forEach(word => {
+
+            tiles.push({
+
+                label: word,
+
+                group: g.name,
+
+                color: g.color,
+
+                size: 1
+
+            });
+
+        });
+
+    });
+
+
+    tiles.sort(() => Math.random() - 0.5);
+
+    render();
+
+}
+
+
+function render() {
+
+    grid.innerHTML = "";
+
+    tiles.forEach((t, i) => {
+
+        const div = document.createElement("div");
+
+        div.className = "tile";
+
+        div.style.background = t.color;
+
+        if (selected.includes(i)) div.classList.add("selected");
+
+        div.innerHTML = t.label;
+
+        div.onclick = () => toggle(i);
+
+        grid.appendChild(div);
+
+    });
+
+}
+
+
+function toggle(i) {
+
+    selected.includes(i)
+
+        ? selected = selected.filter(x => x !== i)
+
+        : selected.push(i);
+
+
+    render();
+
+    check();
+
+}
+
+
+function check() {
+
+    const total = selected.reduce((s,i)=>s+tiles[i].size,0);
+
+    if (total !== 10) return;
+
+
+    const group = tiles[selected[0]].group;
+
+    if (!selected.every(i => tiles[i].group === group)) {
+
+        selected = [];
+
+        render();
+
+        return;
+
+    }
+
+
+    const els = [...grid.children];
+
+    selected.forEach(i => els[i].classList.add("collapsing"));
+
+
+    setTimeout(() => {
+
+        const color = tiles[selected[0]].color;
+
+        const words = selected.map(i=>tiles[i].label).join("<br>");
+
+        selected.sort((a,b)=>b-a).forEach(i=>tiles.splice(i,1));
+
+
+        tiles.push({
+
+            label:<div class="group-label">${group}</div>${words},
+
+            group,
+
+            color,
+
+            size:10
+
+        });
+
+
+        selected = [];
+
+        render();
+
+        if (tiles.length === 1) message.textContent = "🎉 Puzzle Complete!";
+
+    }, 300);
+
+}
+
+</script>
+
+
+</body>
+
+</html>
+
